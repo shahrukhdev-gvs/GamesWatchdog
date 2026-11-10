@@ -243,6 +243,41 @@ _CSS = """
   padding: 14px 16px;
 }
 [data-testid="stMetricValue"] { font-family: var(--gv-display); text-shadow: 0 0 18px rgba(34, 228, 255, .45); }
+@media (max-width: 640px) { [data-testid="stMetricValue"] { font-size: 1.75rem; } }
+/* Value cards: show the help icon as an (i) instead of Streamlit's (?) */
+[data-testid="stMetric"] [data-testid="stTooltipHoverTarget"] button {
+  position: relative;
+  color: var(--gv-cyan);
+  opacity: .8;
+  cursor: help;
+  transition: opacity .15s, filter .15s;
+}
+[data-testid="stMetric"] [data-testid="stTooltipHoverTarget"] button svg path,
+[data-testid="stMetric"] [data-testid="stTooltipHoverTarget"] button svg line { display: none; }
+[data-testid="stMetric"] [data-testid="stTooltipHoverTarget"] button::after {
+  content: "i";
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font: 700 10px/1 Georgia, 'Times New Roman', serif;
+  color: currentColor;
+  pointer-events: none;
+}
+[data-testid="stMetric"] [data-testid="stTooltipHoverTarget"] button:hover {
+  opacity: 1;
+  filter: drop-shadow(0 0 6px rgba(34, 228, 255, .9));
+}
+[data-testid="stTooltipContent"] {
+  max-width: 340px;
+  font-family: var(--gv-body);
+  line-height: 1.45;
+  color: var(--gv-text);
+  background: rgba(16, 13, 36, .97);
+  border: 1px solid rgba(34, 228, 255, .45);
+  border-radius: 12px;
+  box-shadow: 0 14px 40px -12px rgba(0, 0, 0, .9), 0 0 24px -10px rgba(34, 228, 255, .7);
+}
 [data-testid="stMetricLabel"] p { font-family: var(--gv-ui); font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--gv-muted); }
 [data-testid="stDataFrame"], [data-testid="stTable"] {
   border: 1px solid var(--gv-line);

@@ -40,6 +40,9 @@ except Exception as _fa_err:  # file not deployed yet — keep the rest of the a
         service_account_email=lambda *a, **k: None,
         find_stream=lambda *a, **k: (None, "firebase_analytics.py is missing from the repo."),
         game_report=_fa_missing,
+        retention_report=_fa_missing,
+        retention=lambda cohorts, n, as_of: (None, as_of, 0, 0),
+        RETENTION_DAYS=(1, 3, 7),
         is_paid=lambda c: False,
     )
 
@@ -83,6 +86,10 @@ FIREBASE_BRANDS = {
     "adeel.gvs": "Gravity Adeel",
 }
 FIREBASE_MANAGERS = {"babar.gvs"}
+
+# Firebase game view: session-based cards (Sessions, Avg session duration,
+# Sessions / user) and Screen views are hidden for now. Set True to bring them back.
+SHOW_SESSION_METRICS = False
 
 # Each team reads Analytics with its OWN Google key (Streamlit secrets section),
 # so no single Google identity is shared across teams. Anyone not listed
@@ -1238,24 +1245,81 @@ with tab_fb:
                     st.markdown(f"**{sel_day:%a %d %b %Y}** vs {prev_day:%d %b}")
                     if sel_day == datetime.now(PKT).date():
                         st.caption("Today is still in progress — Google Analytics numbers fill in over a few hours.")
+                    def _day(d):  # "Tue 10 Nov" / "Mon 9 Nov" (no leading zero, works on Windows too)
+                        return f"{d:%a} {d.day} {d:%b}"
+
+                    day_s, prev_s = _day(sel_day), _day(prev_day)
+                    vs_prev = f"The arrow compares with {prev_s}."
                     m = st.columns(4)
                     m[0].metric("Active users", f"{_v(cur,'activeUsers'):,.0f}",
-                                _delta(_v(cur,'activeUsers'), _v(prv,'activeUsers')))
+                                _delta(_v(cur,'activeUsers'), _v(prv,'activeUsers')),
+                                help=f"**People who played on {day_s}.** Each person counts once, however "
+                                     f"many times they opened the game that day. {vs_prev}")
                     m[1].metric("New users", f"{_v(cur,'newUsers'):,.0f}",
-                                _delta(_v(cur,'newUsers'), _v(prv,'newUsers')))
-                    m[2].metric("Sessions", f"{_v(cur,'sessions'):,.0f}",
-                                _delta(_v(cur,'sessions'), _v(prv,'sessions')))
-                    m[3].metric("Engagement rate", f"{_v(cur,'engagementRate')*100:.1f}%",
-                                f"{(_v(cur,'engagementRate')-_v(prv,'engagementRate'))*100:+.1f} pts" if prv else None)
-                    m = st.columns(4)
-                    m[0].metric("Avg session duration", _mmss(_v(cur, "averageSessionDuration")),
-                                _delta(_v(cur,'averageSessionDuration'), _v(prv,'averageSessionDuration')))
-                    m[1].metric("Engagement time / user", _mmss(_eng_per_user(cur)),
-                                _delta(_eng_per_user(cur), _eng_per_user(prv)))
-                    m[2].metric("Sessions / user",
-                                f"{(_v(cur,'sessions')/_v(cur,'activeUsers')) if _v(cur,'activeUsers') else 0:.2f}")
-                    m[3].metric("Screen views", f"{_v(cur,'screenPageViews'):,.0f}",
-                                _delta(_v(cur,'screenPageViews'), _v(prv,'screenPageViews')))
+                                _delta(_v(cur,'newUsers'), _v(prv,'newUsers')),
+                                help=f"**People who opened the game for the very first time on {day_s}**, "
+                                     f"roughly the day's new installs that were actually launched. {vs_prev}")
+                    m[2].metric("Engagement rate", f"{_v(cur,'engagementRate')*100:.1f}%",
+                                f"{(_v(cur,'engagementRate')-_v(prv,'engagementRate'))*100:+.1f} pts" if prv else None,
+                                help=f"**Share of play sessions on {day_s} that were 'engaged'**: lasted over "
+                                     "10 seconds, triggered a key event, or showed 2+ screens. Low means many "
+                                     "people open the game and leave straight away. The arrow is the change "
+                                     f"in percentage points vs {prev_s}.")
+                    m[3].metric("Engagement time / user", _mmss(_eng_per_user(cur)),
+                                _delta(_eng_per_user(cur), _eng_per_user(prv)),
+                                help=f"**Average time each player spent with the game on screen on {day_s}** "
+                                     "(total foreground time ÷ active users). Time with the game in the "
+                                     f"background isn't counted. {vs_prev}")
+                    if SHOW_SESSION_METRICS:
+                        m = st.columns(4)
+                        m[0].metric("Sessions", f"{_v(cur,'sessions'):,.0f}",
+                                    _delta(_v(cur,'sessions'), _v(prv,'sessions')),
+                                    help=f"Number of times the game was opened on {day_s}. {vs_prev}")
+                        m[1].metric("Avg session duration", _mmss(_v(cur, "averageSessionDuration")),
+                                    _delta(_v(cur,'averageSessionDuration'), _v(prv,'averageSessionDuration')),
+                                    help=f"Average length of one play session on {day_s}. {vs_prev}")
+                        m[2].metric("Sessions / user",
+                                    f"{(_v(cur,'sessions')/_v(cur,'activeUsers')) if _v(cur,'activeUsers') else 0:.2f}",
+                                    help=f"How many times, on average, each player opened the game on {day_s}.")
+                        m[3].metric("Screen views", f"{_v(cur,'screenPageViews'):,.0f}",
+                                    _delta(_v(cur,'screenPageViews'), _v(prv,'screenPageViews')),
+                                    help=f"Number of screens shown to players on {day_s}. {vs_prev}")
+
+                    # Retention: of the people who first opened the game N days before the
+                    # selected day, how many came back ON the selected day.
+                    st.markdown("**Retention**")
+                    try:
+                        with st.spinner("Fetching retention..."):
+                            ret = fa.retention_report(game["ga4_property_id"], game.get("stream_id"),
+                                                      sel_day.isoformat(), key=fb_key(game["user_id"]))
+                    except Exception as e:
+                        ret = None
+                        st.caption(f"Couldn't load retention from Google Analytics: {e}")
+                    r_cols = st.columns(4)
+                    for col, n in zip(r_cols, fa.RETENTION_DAYS):
+                        pct, inst, users, back = (fa.retention(ret["cohorts"], n, sel_day) if ret
+                                                  else (None, sel_day - timedelta(days=n), 0, 0))
+                        p_pct, p_inst, _, _ = (fa.retention(ret["cohorts"], n, prev_day) if ret
+                                               else (None, prev_day - timedelta(days=n), 0, 0))
+                        if pct is None:
+                            detail = (f"No first-time players on **{_day(inst)}** in Google Analytics, "
+                                      "so there's nothing to measure yet.")
+                        else:
+                            detail = (f"Of the **{users:,}** people who first opened the game on "
+                                      f"**{_day(inst)}**, **{back:,}** came back on **{day_s}** "
+                                      f"({n} day{'s' if n > 1 else ''} later).")
+                        col.metric(
+                            f"Day {n} retention", "—" if pct is None else f"{pct:.1f}%",
+                            f"{pct - p_pct:+.1f} pts" if pct is not None and p_pct is not None else None,
+                            help=f"**Day {n} retention: the share of new players who return {n} "
+                                 f"day{'s' if n > 1 else ''} after first opening the game.** {detail} "
+                                 f"The arrow compares with the players who started on {_day(p_inst)}."
+                                 + (" Today is still in progress, so this will rise as the day goes on."
+                                    if sel_day == datetime.now(PKT).date() else ""),
+                        )
+                    if ret and ret.get("all_streams"):
+                        st.caption("Retention covers every app stream in this GA4 property: Google didn't "
+                                   "allow filtering the retention report to the Android stream only.")
 
                     # Organic vs campaign (by the channel that first brought the user)
                     def _split(day_iso):
@@ -1271,11 +1335,22 @@ with tab_fb:
                     org_p, paid_p = _split(prev_day.isoformat())
                     st.markdown("**New users by source**")
                     s = st.columns(4)
-                    s[0].metric("Organic", f"{org_c:,.0f}", _delta(org_c, org_p))
-                    s[1].metric("Campaign (paid)", f"{paid_c:,.0f}", _delta(paid_c, paid_p))
+                    s[0].metric("Organic", f"{org_c:,.0f}", _delta(org_c, org_p),
+                                help=f"**New players on {day_s} who didn't come from an ad**: they found "
+                                     "the game through Play Store search, browsing, a link, or GA4 couldn't "
+                                     f"tell (Direct / Unassigned). {vs_prev}")
+                    s[1].metric("Campaign (paid)", f"{paid_c:,.0f}", _delta(paid_c, paid_p),
+                                help=f"**New players on {day_s} who came from an ad campaign**: paid search, "
+                                     "social, video, display or cross-network. Only installs Google Analytics "
+                                     "can attribute are counted (see the note under Channels below). "
+                                     f"{vs_prev}")
                     tot = org_c + paid_c
-                    s[2].metric("Organic share", f"{(org_c/tot*100) if tot else 0:.1f}%")
-                    s[3].metric("Paid share", f"{(paid_c/tot*100) if tot else 0:.1f}%")
+                    s[2].metric("Organic share", f"{(org_c/tot*100) if tot else 0:.1f}%",
+                                help=f"**Organic new players as a share of all new players on {day_s}** "
+                                     f"({org_c:,.0f} of {tot:,.0f}).")
+                    s[3].metric("Paid share", f"{(paid_c/tot*100) if tot else 0:.1f}%",
+                                help=f"**Paid-campaign new players as a share of all new players on "
+                                     f"{day_s}** ({paid_c:,.0f} of {tot:,.0f}).")
 
                     t1, t2, t3, t4 = st.tabs(["Channels", "Campaigns", "Countries", "Daily trend"])
                     with t1:
@@ -1326,16 +1401,18 @@ with tab_fb:
                                   "New users": by_day[d]["newUsers"]} for d in days_sorted]
                             ).set_index("Date")
                             st.line_chart(trend)
-                        st.dataframe(
-                            [{"Date": d,
-                              "Active users": int(by_day[d]["activeUsers"]),
-                              "New users": int(by_day[d]["newUsers"]),
-                              "Sessions": int(by_day[d]["sessions"]),
-                              "Avg session": _mmss(by_day[d]["averageSessionDuration"]),
-                              "Engagement / user": _mmss(_eng_per_user(by_day[d])),
-                              "Engagement rate": f"{by_day[d]['engagementRate']*100:.1f}%"}
-                             for d in reversed(days_sorted)],
-                            width="stretch", hide_index=True)
+                        def _trend_row(d):
+                            row = {"Date": d,
+                                   "Active users": int(by_day[d]["activeUsers"]),
+                                   "New users": int(by_day[d]["newUsers"])}
+                            if SHOW_SESSION_METRICS:
+                                row["Sessions"] = int(by_day[d]["sessions"])
+                                row["Avg session"] = _mmss(by_day[d]["averageSessionDuration"])
+                            row["Engagement / user"] = _mmss(_eng_per_user(by_day[d]))
+                            row["Engagement rate"] = f"{by_day[d]['engagementRate']*100:.1f}%"
+                            return row
+                        st.dataframe([_trend_row(d) for d in reversed(days_sorted)],
+                                     width="stretch", hide_index=True)
                         if not days_sorted:
                             st.info("No data in this window yet.")
 

@@ -9,6 +9,7 @@ Each service account only needs "Viewer" in that team's Google Analytics.
 Flow:
   package name --(Analytics Admin API)--> GA4 property + Android data stream
   property + stream --(Analytics Data API)--> daily users / sessions / sources
+  property + stream --(cohort report)--> Day 1 / 3 / 7 retention
 """
 
 from datetime import date, timedelta
@@ -218,3 +219,88 @@ def game_report(property_id, stream_id, end_iso, days, key=DEFAULT_KEY):
 
 def is_paid(channel):
     return (channel or "") in PAID_CHANNELS
+
+
+# ---------------------------------------------------------------------------
+# Retention (GA4 cohort report)
+# ---------------------------------------------------------------------------
+
+RETENTION_DAYS = (1, 3, 7)
+# Cohorts fetched: one per install day, far enough back for Day 7 of the selected
+# day AND of the day before it (for the "vs previous day" arrow).
+_COHORT_LOOKBACK = max(RETENTION_DAYS) + 1
+
+
+def _cohort_body(cohort_days, stream_id):
+    body = {
+        "dimensions": [{"name": "cohort"}, {"name": "cohortNthDay"}],
+        "metrics": [{"name": "cohortActiveUsers"}, {"name": "cohortTotalUsers"}],
+        "cohortSpec": {
+            "cohorts": [{
+                "name": d.isoformat(),
+                "dimension": "firstSessionDate",
+                "dateRange": {"startDate": d.isoformat(), "endDate": d.isoformat()},
+            } for d in cohort_days],
+            "cohortsRange": {"granularity": "DAILY", "startOffset": 0,
+                             "endOffset": max(RETENTION_DAYS)},
+        },
+        "limit": 1000,
+    }
+    if stream_id:
+        body["dimensionFilter"] = {"filter": {
+            "fieldName": "streamId", "stringFilter": {"value": str(stream_id)}}}
+    return body
+
+
+def _parse_cohorts(data):
+    """GA4 cohort rows -> {install_day_iso: {"users": n, "days": {N: active_on_day_N}}}"""
+    out = {}
+    for r in data.get("rows", []):
+        dims = [d.get("value") for d in r.get("dimensionValues", [])]
+        mets = [m.get("value") for m in r.get("metricValues", [])]
+        if len(dims) < 2 or len(mets) < 2:
+            continue
+        try:
+            nth, active, total = int(dims[1]), float(mets[0] or 0), float(mets[1] or 0)
+        except (TypeError, ValueError):
+            continue
+        c = out.setdefault(dims[0], {"users": 0.0, "days": {}})
+        c["users"] = max(c["users"], total)
+        c["days"][nth] = c["days"].get(nth, 0.0) + active
+    return out
+
+
+def fetch_retention(property_id, stream_id, end_iso, key=DEFAULT_KEY):
+    """Install-day cohorts for the days before end_iso, each with the number of
+    its users active on day 0..7 after install.
+
+    -> {"cohorts": {...see _parse_cohorts...}, "all_streams": bool}
+    all_streams is True if GA4 refused the Android-stream filter on a cohort
+    report and the numbers therefore cover every stream in the property."""
+    end = date.fromisoformat(end_iso)
+    days = [end - timedelta(days=n) for n in range(1, _COHORT_LOOKBACK + 1)]
+    url = f"{DATA}/properties/{property_id}:runReport"
+    try:
+        data = _call("POST", url, key, json=_cohort_body(days, stream_id))
+        return {"cohorts": _parse_cohorts(data), "all_streams": False}
+    except GAError as e:
+        if not stream_id or "Google API 400" not in str(e):
+            raise
+    data = _call("POST", url, key, json=_cohort_body(days, None))
+    return {"cohorts": _parse_cohorts(data), "all_streams": True}
+
+
+retention_report = st.cache_data(ttl=600, show_spinner=False)(fetch_retention)
+
+
+def retention(cohorts, n, as_of):
+    """Day-n retention as of a calendar day: of the users who first opened the
+    game n days before as_of, the share who were active on as_of.
+
+    -> (percent or None, install_day, cohort_users, users_back)"""
+    install_day = as_of - timedelta(days=n)
+    c = cohorts.get(install_day.isoformat())
+    if not c or not c["users"]:
+        return None, install_day, 0, 0
+    back = c["days"].get(n, 0.0)
+    return back / c["users"] * 100, install_day, int(c["users"]), int(back)
