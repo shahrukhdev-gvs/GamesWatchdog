@@ -18,6 +18,7 @@ import requests
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from supabase import create_client
+from postgrest.exceptions import APIError
 from PIL import Image
 import imagehash
 
@@ -36,6 +37,32 @@ HEADERS = {
 
 FALLBACK_COUNTRIES = ["us", "pk", "gb", "in", "ca"]
 REMOVED_RECHECK_HOURS = 6  # shorter than the main monitor's 24h, since these are your own accounts
+PAGE_SIZE = 1000  # Supabase returns at most 1000 rows per request by default
+
+
+def fetch_user_apps(user_id):
+    """Every app row this user has, paged so none are cut off at the row limit."""
+    rows, start = [], 0
+    while True:
+        page = supabase.table("apps").select("*").eq("user_id", user_id) \
+            .order("id").range(start, start + PAGE_SIZE - 1).execute().data
+        if not page:
+            return rows
+        rows.extend(page)
+        start += len(page)
+
+
+def insert_app(row):
+    """Insert one apps row and return it, or None if this user already has the
+    package (apps is unique on user_id + package_name). A duplicate must not
+    raise: that would abort the user's whole run, including their digest."""
+    try:
+        return supabase.table("apps").insert(row).execute().data[0]
+    except APIError as e:
+        if getattr(e, "code", None) == "23505":  # unique_violation
+            print(f"[warn] {row['package_name']} already exists for this user; not inserted.")
+            return None
+        raise
 
 
 def fetch_app_page(package_name, country="us"):
@@ -291,8 +318,11 @@ def process_user(user_id, user_devs, settings):
 
     developers = {d["id"]: d for d in user_devs}
 
-    apps_resp = supabase.table("apps").select("*").eq("user_id", user_id).execute()
-    db_apps = {a["package_name"]: a for a in apps_resp.data if a["developer_id"] in developers}
+    user_apps = fetch_user_apps(user_id)
+    db_apps = {a["package_name"]: a for a in user_apps if a["developer_id"] in developers}
+    # The user's apps filed under developers this monitor doesn't check (traced /
+    # watchlist ones). Packages here must not be inserted again.
+    other_apps = {a["package_name"]: a for a in user_apps if a["developer_id"] not in developers}
 
     fresh_map = {}
 
@@ -313,18 +343,27 @@ def process_user(user_id, user_devs, settings):
         stored = db_apps.get(package_name)
 
         if stored is None:
+            elsewhere = other_apps.get(package_name)
+            if elsewhere:
+                print(f"[warn] {package_name} is in the catalog of {fresh['developer_name']}, but this "
+                      f"user already tracks it under developer_id {elsewhere['developer_id']} "
+                      "(not an own account). Leaving it there; skipping.")
+                continue
+
             soup = fetch_app_page(package_name)
             canonical_title = extract_canonical_title(soup) if soup else None
             final_title = canonical_title or fresh["title"]
             icon_hash = get_icon_hash(fresh["icon_url"])
 
-            insert_res = supabase.table("apps").insert({
+            inserted = insert_app({
                 "package_name": package_name, "developer_id": fresh["developer_id"],
                 "user_id": user_id,
                 "title": final_title, "icon_url": fresh["icon_url"],
                 "icon_hash": icon_hash, "status": "active",
-            }).execute()
-            new_app_id = insert_res.data[0]["id"]
+            })
+            if inserted is None:
+                continue
+            new_app_id = inserted["id"]
 
             events["new_upload"].append({
                 "package_name": package_name, "title": final_title,
