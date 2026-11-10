@@ -25,6 +25,7 @@ from bs4 import BeautifulSoup
 from supabase import create_client
 
 import auth
+import theme
 
 try:
     import firebase_analytics as fa
@@ -42,7 +43,8 @@ except Exception as _fa_err:  # file not deployed yet — keep the rest of the a
         is_paid=lambda c: False,
     )
 
-st.set_page_config(page_title="Play Store Watchdog", layout="wide")
+st.set_page_config(page_title="Play Store Watchdog", page_icon="🎮", layout="wide")
+theme.apply_theme()
 
 SUPABASE_URL = st.secrets.get("SUPABASE_URL", os.getenv("SUPABASE_URL"))
 SUPABASE_ANON_KEY = st.secrets.get("SUPABASE_ANON_KEY", os.getenv("SUPABASE_ANON_KEY"))
@@ -567,7 +569,29 @@ def run_trace(url):
 # UI
 # ---------------------------------------------------------------------------
 
-st.title("Play Store Watchdog")
+@st.cache_data(ttl=120, show_spinner=False)
+def hero_stats(user_id, _client):
+    """Counters for the banner, per user (RLS scopes the client). Cached for 2
+    minutes so they don't add four queries to every rerun."""
+    def count(query):
+        try:
+            return query.execute().count
+        except Exception:
+            return None
+
+    since = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+    dev = lambda: _client.table("developers").select("id", count="exact").limit(1)
+    return [
+        (count(dev().neq("source", "own_account")), "Publishers watched", "#22e4ff"),
+        (count(dev().eq("source", "own_account")), "Own accounts", "#8b5cf6"),
+        (count(_client.table("apps").select("id", count="exact").eq("status", "active").limit(1)),
+         "Live games tracked", "#b6ff3b"),
+        (count(_client.table("change_log").select("id", count="exact").gte("detected_at", since).limit(1)),
+         "Events · last 24h", "#ff2e88"),
+    ]
+
+
+theme.hero(hero_stats(st.session_state.sb_user["id"], supabase))
 
 tab1, tab_spy, tab_search, tab_mine, tab_fb, tab2, tab_short, tab3, tab4, tab_settings = st.tabs(
     ["🔍 Trace", "📈 AppStore Spy", "🔎 Search by Name", "🏢 My Accounts", "🔥 Firebase",
@@ -1607,13 +1631,7 @@ with tab3:
                     by_dev.setdefault(dev_name, []).append(c)
 
                 for dev_name, dev_items in by_dev.items():
-                    st.markdown(
-                        f"<div style='background-color:#1e2530; padding:10px 14px; "
-                        f"border-radius:6px; margin-top:14px; margin-bottom:10px;'>"
-                        f"<span style='font-size:22px; font-weight:700;'>🏢 {dev_name}</span>"
-                        f"</div>",
-                        unsafe_allow_html=True,
-                    )
+                    theme.dev_bar(dev_name)
 
                     for c in dev_items:
                         package_name = c.get("package_name") or "-"

@@ -21,6 +21,8 @@ route if this ever becomes worth revisiting.
 import streamlit as st
 from supabase import create_client
 
+import theme
+
 USERNAME_DOMAIN = "watchdog.local"
 
 
@@ -187,20 +189,20 @@ def list_users(supabase_url, service_key):
 
 def render_login(supabase_url, anon_key):
     """Full-page login gate. Returns True once signed in."""
-    st.title("Play Store Watchdog")
-    st.caption("Sign in to continue.")
+    _, middle, _ = st.columns([1, 1.25, 1])
+    with middle:
+        theme.login_header()
+        with st.form("login_form"):
+            username = st.text_input("Username", placeholder="shahrukh.gvs")
+            password = st.text_input("Password", type="password")
+            if st.form_submit_button("Sign in", type="primary", width="stretch"):
+                ok, err = sign_in(supabase_url, anon_key, username, password)
+                if ok:
+                    st.rerun()
+                else:
+                    st.error(err)
 
-    with st.form("login_form"):
-        username = st.text_input("Username", placeholder="shahrukh.gvs")
-        password = st.text_input("Password", type="password")
-        if st.form_submit_button("Sign in", type="primary"):
-            ok, err = sign_in(supabase_url, anon_key, username, password)
-            if ok:
-                st.rerun()
-            else:
-                st.error(err)
-
-    st.caption("No account? Accounts are created by the administrator.")
+        st.caption("No account? Accounts are created by the administrator.")
     return False
 
 
@@ -215,9 +217,7 @@ def require_login(supabase_url, anon_key):
 def render_account_sidebar(supabase_url, anon_key):
     prof = current_profile() or {}
     with st.sidebar:
-        st.markdown(f"**Signed in as** `{prof.get('username', 'unknown')}`")
-        if prof.get("is_admin"):
-            st.caption("Administrator")
-        if st.button("Sign out", use_container_width=True):
+        theme.player_card(prof.get("username", "unknown"), bool(prof.get("is_admin")))
+        if st.button("Sign out", width="stretch"):
             sign_out()
             st.rerun()
