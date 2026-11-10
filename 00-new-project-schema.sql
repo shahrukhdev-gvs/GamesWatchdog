@@ -118,10 +118,11 @@ alter table developers add column if not exists studio_id bigint references stud
 
 -- 4. (Backfill skipped — nothing to assign in an empty database.)
 
--- 5. Enforce global uniqueness of account_id across all studios
---    (drops the old per-network unique constraint, adds a global one)
+-- 5. Drop the old per-network unique constraint.
+--    07 also added a global unique (account_id) constraint here, but 09 below
+--    drops it again in favour of per-user uniqueness (uq_adids_user_account).
+--    Left out so a re-run can't fail once two users share an account_id.
 alter table ad_network_ids drop constraint if exists ad_network_ids_network_account_id_key;
-alter table ad_network_ids add constraint ad_network_ids_account_id_unique unique (account_id);
 
 -- 6. Helpful indexes
 create index if not exists idx_ad_network_ids_studio on ad_network_ids(studio_id);
