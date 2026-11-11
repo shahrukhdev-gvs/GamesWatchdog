@@ -2,7 +2,9 @@ name: Play Store Watchdog Monitor
 
 on:
   schedule:
-    - cron: "0 */2 * * *"   # every 2 hours
+    # Every 2 hours at :17. GitHub drops or delays many scheduled runs that
+    # land on the top of the hour, so this is deliberately off the hour.
+    - cron: "17 */2 * * *"
   workflow_dispatch: {}       # lets you also trigger it manually from the Actions tab
 
 jobs:

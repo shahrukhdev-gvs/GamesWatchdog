@@ -2,7 +2,9 @@ name: Play Store Watchdog - My Accounts Monitor
 
 on:
   schedule:
-    - cron: "*/30 * * * *"   # every 30 minutes
+    # Every 30 minutes, at :07 and :37 (off the hour: GitHub drops or delays
+    # many scheduled runs that land on :00 / :30).
+    - cron: "7,37 * * * *"
   workflow_dispatch: {}
 
 jobs:
