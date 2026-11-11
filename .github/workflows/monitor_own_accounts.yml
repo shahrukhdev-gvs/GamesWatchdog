@@ -1,11 +1,17 @@
 name: Play Store Watchdog - My Accounts Monitor
 
 on:
-  schedule:
-    # Every 30 minutes, at :07 and :37 (off the hour: GitHub drops or delays
-    # many scheduled runs that land on :00 / :30).
-    - cron: "7,37 * * * *"
+  # No GitHub `schedule:` on purpose. Supabase pg_cron starts this workflow
+  # every 30 minutes at :07 and :37 UTC through the GitHub API (job
+  # "monitor-own-accounts", calling private.dispatch_monitor('monitor_own_accounts.yml')).
+  # GitHub's own scheduler dropped or delayed most runs. You can also start it
+  # from the Actions tab.
   workflow_dispatch: {}
+
+# Never let two own-accounts runs overlap; a second one waits for the first.
+concurrency:
+  group: monitor-own-accounts
+  cancel-in-progress: false
 
 jobs:
   monitor_own:

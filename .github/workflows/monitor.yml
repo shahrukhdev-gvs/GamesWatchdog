@@ -1,11 +1,16 @@
 name: Play Store Watchdog Monitor
 
 on:
-  schedule:
-    # Every 2 hours at :17. GitHub drops or delays many scheduled runs that
-    # land on the top of the hour, so this is deliberately off the hour.
-    - cron: "17 */2 * * *"
-  workflow_dispatch: {}       # lets you also trigger it manually from the Actions tab
+  # No GitHub `schedule:` on purpose. Supabase pg_cron starts this workflow
+  # every 2 hours at :17 UTC through the GitHub API (job "monitor-watchlist",
+  # calling private.dispatch_monitor('monitor.yml')). GitHub's own scheduler
+  # dropped or delayed most runs. You can also start it from the Actions tab.
+  workflow_dispatch: {}
+
+# Never let two watchlist runs overlap; a second one waits for the first.
+concurrency:
+  group: monitor-watchlist
+  cancel-in-progress: false
 
 jobs:
   monitor:
