@@ -221,3 +221,4 @@ def render_account_sidebar(supabase_url, anon_key):
         if st.button("Sign out", width="stretch"):
             sign_out()
             st.rerun()
+        theme.theme_hint()

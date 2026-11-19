@@ -6,8 +6,12 @@ player_card() render the custom HTML blocks. Everything else stays plain
 Streamlit (see CLAUDE.md: no custom components), styled through CSS that
 targets Streamlit's data-testid / baseweb hooks.
 
-Colours live in .streamlit/config.toml (built-in widgets) and in the :root
-variables below (custom blocks). Keep the two in step.
+Light and dark: .streamlit/config.toml defines [theme.light] and [theme.dark]
+(built-in widgets), and viewers switch with Streamlit's own ⋮ menu (System /
+Light / Dark). Streamlit sets `color-scheme` on .stApp to match, so every
+colour below is written as light-dark(<light>, <dark>) and follows the switch
+instantly, with no rerun. Keep the two palettes in step with config.toml.
+The hero banner stays dark in both themes (it sets its own colours).
 """
 
 import html
@@ -36,32 +40,45 @@ _FONTS = ("https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900"
 _CSS = """
 @import url('__FONTS__');
 
+/* Every colour is light-dark(LIGHT, DARK). It resolves against the
+   color-scheme Streamlit puts on .stApp, so it flips with the menu switch.
+   NEVER write a less-than sign in this stylesheet, not even in a comment:
+   Streamlit's HTML sanitiser drops the whole style block if it sees one. */
 :root {
-  --gv-bg: #06050d;
-  --gv-panel: rgba(21, 18, 46, .72);
-  --gv-line: rgba(139, 92, 246, .28);
-  --gv-line-strong: rgba(139, 92, 246, .62);
-  --gv-violet: #8b5cf6;
-  --gv-pink: #ff2e88;
-  --gv-cyan: #22e4ff;
-  --gv-lime: #b6ff3b;
-  --gv-text: #ecebff;
-  --gv-muted: #a3a0cc;
+  --gv-bg: light-dark(#f6f5fb, #06050d);
+  --gv-panel: light-dark(rgba(255, 255, 255, .82), rgba(21, 18, 46, .72));
+  --gv-input: light-dark(#ffffff, rgba(9, 8, 22, .85));
+  --gv-line: light-dark(rgba(124, 58, 237, .20), rgba(139, 92, 246, .28));
+  --gv-line-strong: light-dark(rgba(124, 58, 237, .45), rgba(139, 92, 246, .62));
+  --gv-violet: light-dark(#7c3aed, #8b5cf6);
+  --gv-pink: light-dark(#c2187a, #ff2e88);
+  --gv-cyan: light-dark(#0b7fa3, #22e4ff);
+  --gv-lime: light-dark(#3d7a00, #b6ff3b);
+  --gv-text: light-dark(#16132b, #ecebff);
+  --gv-heading: light-dark(#0f0c24, #ffffff);
+  --gv-muted: light-dark(#5b5778, #a3a0cc);
+  --gv-glow-1: light-dark(rgba(124, 58, 237, .10), rgba(139, 92, 246, .26));
+  --gv-glow-2: light-dark(rgba(255, 46, 136, .07), rgba(255, 46, 136, .16));
+  --gv-glow-3: light-dark(rgba(11, 127, 163, .06), rgba(34, 228, 255, .10));
+  --gv-grid: light-dark(rgba(124, 58, 237, .05), rgba(139, 92, 246, .045));
+  --gv-header: light-dark(rgba(246, 245, 251, .75), rgba(6, 5, 13, .6));
+  --gv-text-glow: light-dark(rgba(11, 127, 163, .18), rgba(34, 228, 255, .45));
+  --gv-shadow: light-dark(rgba(60, 40, 120, .14), rgba(0, 0, 0, .95));
   --gv-display: 'Orbitron', 'Rajdhani', sans-serif;
   --gv-ui: 'Rajdhani', 'Inter', sans-serif;
   --gv-body: 'Inter', 'Source Sans Pro', sans-serif;
 }
 
-/* ---------- canvas: deep space + neon glow + faint grid ---------- */
+/* ---------- canvas: soft glow + faint grid ---------- */
 .stApp {
   font-family: var(--gv-body);
   color: var(--gv-text);
   background:
-    radial-gradient(1100px 560px at 8% -12%, rgba(139, 92, 246, .26), transparent 62%),
-    radial-gradient(900px 520px at 108% 6%, rgba(255, 46, 136, .16), transparent 60%),
-    radial-gradient(900px 640px at 50% 118%, rgba(34, 228, 255, .10), transparent 62%),
-    linear-gradient(rgba(139, 92, 246, .045) 1px, transparent 1px) 0 0 / 46px 46px,
-    linear-gradient(90deg, rgba(139, 92, 246, .045) 1px, transparent 1px) 0 0 / 46px 46px,
+    radial-gradient(1100px 560px at 8% -12%, var(--gv-glow-1), transparent 62%),
+    radial-gradient(900px 520px at 108% 6%, var(--gv-glow-2), transparent 60%),
+    radial-gradient(900px 640px at 50% 118%, var(--gv-glow-3), transparent 62%),
+    linear-gradient(var(--gv-grid) 1px, transparent 1px) 0 0 / 46px 46px,
+    linear-gradient(90deg, var(--gv-grid) 1px, transparent 1px) 0 0 / 46px 46px,
     var(--gv-bg);
   background-attachment: fixed;
 }
@@ -69,7 +86,7 @@ _CSS = """
   background: transparent;
 }
 [data-testid="stHeader"] {
-  background: rgba(6, 5, 13, .6);
+  background: var(--gv-header);
   backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--gv-line);
 }
@@ -102,8 +119,8 @@ _CSS = """
 .stApp a:hover { color: var(--gv-pink); text-shadow: 0 0 12px rgba(255, 46, 136, .6); }
 .stApp code {
   color: var(--gv-cyan);
-  background: rgba(34, 228, 255, .08);
-  border: 1px solid rgba(34, 228, 255, .18);
+  background: light-dark(rgba(11, 127, 163, .07), rgba(34, 228, 255, .08));
+  border: 1px solid light-dark(rgba(11, 127, 163, .2), rgba(34, 228, 255, .18));
   border-radius: 6px;
 }
 [data-testid="stCaptionContainer"] { color: var(--gv-muted); }
@@ -126,7 +143,7 @@ _CSS = """
   border: 1px solid var(--gv-line);
   border-radius: 14px;
   backdrop-filter: blur(10px);
-  box-shadow: 0 18px 40px -28px rgba(139, 92, 246, .9);
+  box-shadow: 0 18px 40px -28px light-dark(rgba(124, 58, 237, .45), rgba(139, 92, 246, .9));
 }
 .stTabs [role="tablist"]::after, .stTabs .react-aria-SelectionIndicator,
 .stTabs [data-baseweb="tab-highlight"], .stTabs [data-baseweb="tab-border"] { display: none; }
@@ -146,7 +163,7 @@ _CSS = """
   letter-spacing: .03em;
   white-space: nowrap;
 }
-.stTabs [role="tab"]:hover { color: var(--gv-text); background: rgba(139, 92, 246, .14); }
+.stTabs [role="tab"]:hover { color: var(--gv-heading); background: light-dark(rgba(124, 58, 237, .10), rgba(139, 92, 246, .14)); }
 .stTabs [role="tab"][aria-selected="true"] {
   color: #fff;
   background: linear-gradient(135deg, rgba(124, 58, 237, .95), rgba(255, 46, 136, .88));
@@ -174,9 +191,9 @@ _CSS = """
 }
 [data-testid="stBaseButton-secondary"]:hover, [data-testid="stBaseButton-secondaryFormSubmit"]:hover {
   border-color: var(--gv-cyan);
-  color: #fff;
-  background: rgba(34, 228, 255, .08);
-  box-shadow: inset 0 0 0 1px var(--gv-cyan), 0 0 20px -4px rgba(34, 228, 255, .7);
+  color: var(--gv-heading);
+  background: light-dark(rgba(11, 127, 163, .07), rgba(34, 228, 255, .08));
+  box-shadow: inset 0 0 0 1px var(--gv-cyan), 0 0 20px -4px light-dark(rgba(11, 127, 163, .35), rgba(34, 228, 255, .7));
   transform: translateY(-1px);
 }
 [data-testid="stBaseButton-primary"], [data-testid="stBaseButton-primaryFormSubmit"] {
@@ -203,7 +220,7 @@ _CSS = """
   color: var(--gv-muted);
 }
 [data-baseweb="input"], [data-baseweb="textarea"], [data-baseweb="select"] > div {
-  background: rgba(9, 8, 22, .85);
+  background: var(--gv-input);
   border-color: var(--gv-line);
   border-radius: 10px;
   transition: border-color .18s, box-shadow .18s;
@@ -211,7 +228,7 @@ _CSS = """
 [data-baseweb="input"]:focus-within, [data-baseweb="textarea"]:focus-within,
 [data-baseweb="select"] > div:focus-within {
   border-color: var(--gv-cyan);
-  box-shadow: 0 0 0 3px rgba(34, 228, 255, .14), 0 0 20px -8px rgba(34, 228, 255, .8);
+  box-shadow: 0 0 0 3px light-dark(rgba(11, 127, 163, .14), rgba(34, 228, 255, .14)), 0 0 20px -8px light-dark(rgba(11, 127, 163, .4), rgba(34, 228, 255, .8));
 }
 
 /* ---------- cards: expanders, forms, metrics, tables, alerts ---------- */
@@ -225,10 +242,10 @@ _CSS = """
 }
 [data-testid="stExpander"] details:hover {
   border-color: var(--gv-line-strong);
-  box-shadow: 0 0 26px -14px rgba(139, 92, 246, .95);
+  box-shadow: 0 0 26px -14px light-dark(rgba(124, 58, 237, .5), rgba(139, 92, 246, .95));
 }
-[data-testid="stExpander"] details[open] { border-color: rgba(34, 228, 255, .42); }
-[data-testid="stExpander"] summary:hover { background: rgba(139, 92, 246, .10); }
+[data-testid="stExpander"] details[open] { border-color: light-dark(rgba(11, 127, 163, .45), rgba(34, 228, 255, .42)); }
+[data-testid="stExpander"] summary:hover { background: light-dark(rgba(124, 58, 237, .06), rgba(139, 92, 246, .10)); }
 [data-testid="stExpander"] summary p { font-family: var(--gv-ui); font-weight: 700; font-size: 1.05rem; letter-spacing: .02em; }
 [data-testid="stForm"] {
   background: var(--gv-panel);
@@ -242,7 +259,7 @@ _CSS = """
   border-radius: 14px;
   padding: 14px 16px;
 }
-[data-testid="stMetricValue"] { font-family: var(--gv-display); text-shadow: 0 0 18px rgba(34, 228, 255, .45); }
+[data-testid="stMetricValue"] { font-family: var(--gv-display); text-shadow: 0 0 18px var(--gv-text-glow); }
 @media (max-width: 640px) { [data-testid="stMetricValue"] { font-size: 1.75rem; } }
 /* Value cards: show the help icon as an (i) instead of Streamlit's (?) */
 [data-testid="stMetric"] [data-testid="stTooltipHoverTarget"] button {
@@ -266,13 +283,15 @@ _CSS = """
 }
 [data-testid="stMetric"] [data-testid="stTooltipHoverTarget"] button:hover {
   opacity: 1;
-  filter: drop-shadow(0 0 6px rgba(34, 228, 255, .9));
+  filter: drop-shadow(0 0 6px light-dark(rgba(11, 127, 163, .6), rgba(34, 228, 255, .9)));
 }
+/* Tooltips render outside .stApp, so they can't see the theme: they stay a
+   dark card in both themes, with fixed colours. */
 [data-testid="stTooltipContent"] {
   max-width: 340px;
   font-family: var(--gv-body);
   line-height: 1.45;
-  color: var(--gv-text);
+  color: #ecebff;
   background: rgba(16, 13, 36, .97);
   border: 1px solid rgba(34, 228, 255, .45);
   border-radius: 12px;
@@ -283,15 +302,17 @@ _CSS = """
   border: 1px solid var(--gv-line);
   border-radius: 12px;
   overflow: hidden;
-  box-shadow: 0 16px 36px -24px rgba(0, 0, 0, .95);
+  box-shadow: 0 16px 36px -24px var(--gv-shadow);
 }
-[data-testid="stAlertContainer"] { border-radius: 12px; border: 1px solid rgba(255, 255, 255, .07); backdrop-filter: blur(6px); }
+[data-testid="stAlertContainer"] { border-radius: 12px; border: 1px solid var(--gv-line); backdrop-filter: blur(6px); }
 
 /* ---------- sidebar ---------- */
 [data-testid="stSidebar"] {
-  background: linear-gradient(180deg, rgba(22, 16, 50, .97), rgba(7, 6, 18, .97));
+  background: linear-gradient(180deg, light-dark(#ffffff, rgba(22, 16, 50, .97)), light-dark(#f1eefb, rgba(7, 6, 18, .97)));
   border-right: 1px solid var(--gv-line);
 }
+.gv-theme-hint { font-family: var(--gv-ui); font-weight: 600; font-size: .9rem; color: var(--gv-muted); margin-top: .4rem; }
+.gv-theme-hint b { color: var(--gv-text); }
 .gv-player {
   display: flex;
   align-items: center;
@@ -299,7 +320,7 @@ _CSS = """
   padding: 12px;
   margin-bottom: .8rem;
   border-radius: 14px;
-  background: rgba(139, 92, 246, .10);
+  background: light-dark(rgba(124, 58, 237, .06), rgba(139, 92, 246, .10));
   border: 1px solid var(--gv-line);
 }
 .gv-avatar {
@@ -317,7 +338,7 @@ _CSS = """
   box-shadow: 0 0 22px -6px rgba(255, 46, 136, .9);
 }
 .gv-player-label { font-family: var(--gv-ui); font-weight: 700; font-size: .72rem; letter-spacing: .22em; color: var(--gv-muted); }
-.gv-player-name { font-family: var(--gv-ui); font-weight: 700; font-size: 1.12rem; color: #fff; line-height: 1.15; word-break: break-all; }
+.gv-player-name { font-family: var(--gv-ui); font-weight: 700; font-size: 1.12rem; color: var(--gv-heading); line-height: 1.15; word-break: break-all; }
 .gv-badge {
   display: inline-block;
   margin-top: 4px;
@@ -328,12 +349,22 @@ _CSS = """
   font-size: .7rem;
   letter-spacing: .16em;
   color: var(--gv-lime);
-  border: 1px solid rgba(182, 255, 59, .4);
-  background: rgba(182, 255, 59, .08);
+  border: 1px solid light-dark(rgba(61, 122, 0, .4), rgba(182, 255, 59, .4));
+  background: light-dark(rgba(61, 122, 0, .08), rgba(182, 255, 59, .08));
 }
 
-/* ---------- hero banner ---------- */
+/* ---------- hero banner: dark in both themes ---------- */
 .gv-hero {
+  /* fixed palette: the banner is always a dark game-style card */
+  --gv-text: #ecebff;
+  --gv-heading: #ffffff;
+  --gv-muted: #b4b0dc;
+  --gv-cyan: #22e4ff;
+  --gv-lime: #b6ff3b;
+  --gv-violet: #8b5cf6;
+  --gv-pink: #ff2e88;
+  --gv-line: rgba(139, 92, 246, .28);
+  color: var(--gv-text);
   position: relative;
   overflow: hidden;
   margin: 0 0 1.1rem;
@@ -375,7 +406,7 @@ _CSS = """
   line-height: 1.05;
   letter-spacing: .05em;
   text-transform: uppercase;
-  color: #fff;
+  color: var(--gv-heading);
 }
 .gv-title span {
   background: linear-gradient(90deg, var(--gv-cyan), var(--gv-violet), var(--gv-pink), var(--gv-cyan));
@@ -521,6 +552,14 @@ def player_card(username, is_admin=False):
         '<div><div class="gv-player-label">SIGNED IN AS</div>'
         f'<div class="gv-player-name">{html.escape(name)}</div>{badge}</div></div>'
     )
+
+
+def theme_hint():
+    """Sidebar pointer to Streamlit's own light/dark switch. Python can't change
+    the theme itself, and that switch also re-themes the built-in tables and
+    dropdowns, which CSS can't reach."""
+    _md('<div class="gv-theme-hint">🌗 <b>Light / Dark:</b> open the <b>⋮</b> menu '
+        '(top right) and pick System, Light or Dark.</div>')
 
 
 def dev_bar(name):

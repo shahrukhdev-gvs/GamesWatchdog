@@ -8,7 +8,7 @@ accounts and watch them for changes. Read this before changing anything.
 | Piece | Where it runs |
 |---|---|
 | `dashboard.py` | Streamlit Cloud — `gamebuzztracker.streamlit.app`, auto-deploys from `main` |
-| `theme.py`, `.streamlit/config.toml` | The dashboard's dark "game studio" look: CSS plus the hero banner, login header and sidebar card |
+| `theme.py`, `.streamlit/config.toml` | The dashboard's "game studio" look, light and dark: CSS plus the hero banner, login header and sidebar card |
 | `monitor.py` | GitHub Actions (`monitor.yml`), **started by Supabase pg_cron** every 2 hours at :17 UTC — competitors / watchlist |
 | `monitor_own_accounts.py` | GitHub Actions (`monitor_own_accounts.yml`), **started by Supabase pg_cron** every 30 min at :07 / :37 UTC — our own accounts |
 | `auth.py` | Supabase Auth helpers (usernames map to `<username>@watchdog.local`) |
@@ -149,6 +149,15 @@ fresh database; 15/16 aren't in the repo. The next new file is **17**.
   hooks. Streamlit changes its markup between versions (1.6x moved tabs to
   react-aria: `[role="tab"]`, `aria-selected`), so check the page after a
   Streamlit upgrade.
+- Light / dark: `config.toml` has `[theme.light]` and `[theme.dark]`; viewers
+  switch with Streamlit's own **⋮ menu** (System / Light / Dark; default
+  System follows the device). Python can't set the theme. Streamlit puts
+  `color-scheme` on `.stApp`, so every colour in `theme.py` is
+  `light-dark(LIGHT, DARK)` and flips instantly. The hero banner and tooltips
+  stay dark in both themes on purpose.
+- **Never put a `<` in `theme._CSS`, not even in a comment.** `st.html`
+  sanitises the `<style>` block and drops all of it if it sees tag-like text,
+  which silently removes the whole theme. `tests/test_theme.py` guards this.
 
 ## Testing without credentials
 

@@ -1,6 +1,10 @@
-# Dark "game studio" theme. Streamlit applies this to every built-in widget
-# (tables, selectboxes, popovers, checkboxes); theme.py adds the custom styling.
-[theme]
+# Two themes. Streamlit's built-in widgets (tables, selectboxes, popovers,
+# checkboxes) take their colours from here; theme.py adds the custom styling
+# and switches its own palette to match whichever theme is active.
+# Viewers switch with the theme button in the sidebar (or ⋮ → Settings);
+# by default the app follows the device's light/dark setting.
+
+[theme.dark]
 base = "dark"
 primaryColor = "#ff2e88"
 backgroundColor = "#06050d"
@@ -8,4 +12,14 @@ secondaryBackgroundColor = "#15122e"
 textColor = "#ecebff"
 linkColor = "#22e4ff"
 borderColor = "#2c2554"
+baseRadius = "10px"
+
+[theme.light]
+base = "light"
+primaryColor = "#c2187a"
+backgroundColor = "#f6f5fb"
+secondaryBackgroundColor = "#ebe8f7"
+textColor = "#16132b"
+linkColor = "#0b7fa3"
+borderColor = "#d6d1ec"
 baseRadius = "10px"
